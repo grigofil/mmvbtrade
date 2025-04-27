@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple, Optional
 from datetime import datetime, timedelta
 
 from app.strategies.base import Strategy
+from app.risk_management import RiskManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ class MovingAverageStrategy(Strategy):
     
     def __init__(self, fast_period: int = 10, slow_period: int = 30, 
                 signal_threshold: float = 0.0, overbought_level: float = 70.0,
-                oversold_level: float = 30.0):
+                oversold_level: float = 30.0, risk_manager: Optional[RiskManager] = None,
+                stop_loss_pct: float = 0.02, take_profit_pct: float = 0.04):
         """
         Initialize the strategy
         
@@ -31,10 +33,21 @@ class MovingAverageStrategy(Strategy):
             signal_threshold: Minimum difference between fast and slow MA to generate a signal (%)
             overbought_level: Level to consider market overbought (for RSI filter)
             oversold_level: Level to consider market oversold (for RSI filter)
+            risk_manager: Custom risk manager instance (optional)
+            stop_loss_pct: Stop loss percentage (default: 2%)
+            take_profit_pct: Take profit percentage (default: 4%)
         """
+        # Create risk manager with specified parameters if none provided
+        if risk_manager is None:
+            risk_manager = RiskManager(
+                stop_loss_pct=stop_loss_pct,
+                take_profit_pct=take_profit_pct
+            )
+            
         super().__init__(
             name="Moving Average Crossover",
-            description="Generates signals based on crossovers between fast and slow moving averages"
+            description="Generates signals based on crossovers between fast and slow moving averages",
+            risk_manager=risk_manager
         )
         
         if fast_period >= slow_period:
@@ -45,6 +58,11 @@ class MovingAverageStrategy(Strategy):
         self.signal_threshold = signal_threshold
         self.overbought_level = overbought_level
         self.oversold_level = oversold_level
+        
+        # Current position tracking
+        self.current_position = None
+        self.position_entry_price = None
+        self.position_entry_time = None
         
         logger.info(f"Initialized Moving Average strategy with fast_period={fast_period}, slow_period={slow_period}")
     
@@ -181,6 +199,16 @@ class MovingAverageStrategy(Strategy):
         # Get the latest signal
         latest_signal = df.iloc[-1]['signal']
         
+        # If we have a current position, check stop loss/take profit
+        if self.current_position is not None:
+            current_price = df.iloc[-1]['close']
+            exit_signal = self.check_stop_loss_take_profit(self.current_position, current_price)
+            
+            if exit_signal["close"]:
+                # Force an exit signal due to risk management
+                latest_signal = -1
+                logger.info(f"Position exit triggered by risk management: {exit_signal['reason']}")
+        
         if latest_signal != 0:
             # Return signal with metadata
             metadata = {
@@ -197,6 +225,35 @@ class MovingAverageStrategy(Strategy):
                 'bb_lower': df.iloc[-1]['bb_lower'],
                 'trend_strength': df.iloc[-1]['trend_strength']
             }
+            
+            # Update position tracking
+            if latest_signal == 1 and self.current_position is None:
+                # Opening a new position
+                position_id = f"pos_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                self.current_position = position_id
+                self.position_entry_price = df.iloc[-1]['close']
+                self.position_entry_time = datetime.now()
+                
+                # Register with risk manager
+                self.risk_manager.register_position(
+                    position_id=position_id,
+                    entry_price=self.position_entry_price,
+                    quantity=1,  # Will be determined by portfolio management
+                    direction="long"
+                )
+                
+                metadata['position_id'] = position_id
+                
+            elif latest_signal == -1 and self.current_position is not None:
+                # Closing existing position
+                metadata['position_id'] = self.current_position
+                metadata['position_entry_price'] = self.position_entry_price
+                metadata['position_duration'] = (datetime.now() - self.position_entry_time).total_seconds() / 3600  # hours
+                
+                # Reset position tracking
+                self.current_position = None
+                self.position_entry_price = None
+                self.position_entry_time = None
             
             logger.info(f"Generated {'BUY' if latest_signal == 1 else 'SELL'} signal at {metadata['price']}")
             return int(latest_signal), metadata
@@ -337,4 +394,26 @@ class MovingAverageStrategy(Strategy):
         # Calculate profit
         profit_pct = (balance / initial_balance - 1) * 100
         
-        return profit_pct 
+        return profit_pct
+    
+    def update_portfolio_value(self, portfolio_value: float):
+        """
+        Update portfolio value for risk tracking
+        
+        Args:
+            portfolio_value: Current portfolio value
+        """
+        self.risk_manager.update_portfolio_value(portfolio_value)
+        
+    def can_open_new_position(self, portfolio_value: float, current_price: float) -> Tuple[bool, Dict]:
+        """
+        Check if a new position can be opened based on risk parameters
+        
+        Args:
+            portfolio_value: Current portfolio value
+            current_price: Current price of the instrument
+            
+        Returns:
+            Tuple of (allowed, details)
+        """
+        return self.check_risk_before_trade(portfolio_value, current_price, "long") 

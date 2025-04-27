@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Any, Type
 from app.strategies.base import Strategy
 from app.strategies.moving_average import MovingAverageStrategy
 from app.strategies.mean_reversion import MeanReversionStrategy
+from app.risk_management import RiskManager
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,13 @@ class StrategyFactory:
         return strategies
     
     @classmethod
-    def create_strategy(cls, strategy_id: str, **kwargs) -> Optional[Strategy]:
+    def create_strategy(cls, strategy_id: str, risk_params: Optional[Dict[str, Any]] = None, **kwargs) -> Optional[Strategy]:
         """
         Create a strategy instance by ID
         
         Args:
             strategy_id: Strategy identifier
+            risk_params: Risk management parameters (optional)
             **kwargs: Strategy parameters
             
         Returns:
@@ -57,12 +59,39 @@ class StrategyFactory:
         strategy_class = cls.STRATEGY_REGISTRY[strategy_id]
         
         try:
+            # Create risk manager if parameters provided
+            risk_manager = None
+            if risk_params:
+                risk_manager = RiskManager(**risk_params)
+                kwargs['risk_manager'] = risk_manager
+            
             strategy = strategy_class(**kwargs)
             logger.info(f"Created strategy: {strategy_id} with parameters: {kwargs}")
+            
+            if risk_params:
+                logger.info(f"Applied risk parameters: stop_loss={risk_params.get('stop_loss_pct')}, "
+                          f"take_profit={risk_params.get('take_profit_pct')}")
+            
             return strategy
         except Exception as e:
             logger.error(f"Failed to create strategy {strategy_id}: {e}")
             return None
+            
+    @classmethod
+    def get_default_risk_parameters(cls) -> Dict[str, float]:
+        """
+        Get default risk management parameters
+        
+        Returns:
+            Dictionary with default risk parameters
+        """
+        return {
+            "max_position_size_pct": 0.05,  # 5% of portfolio
+            "stop_loss_pct": 0.02,          # 2% stop loss
+            "take_profit_pct": 0.04,        # 4% take profit
+            "max_drawdown_pct": 0.1,        # 10% max drawdown
+            "daily_loss_limit_pct": 0.03    # 3% daily loss limit
+        }
     
     @classmethod
     def register_strategy(cls, strategy_id: str, strategy_class: Type[Strategy]) -> bool:
@@ -109,6 +138,10 @@ class StrategyFactory:
         
         # Get parameters from get_strategy_info()
         strategy_info = default_instance.get_strategy_info()
-        parameters = strategy_info.get("parameters", {})
+        strategy_params = strategy_info.get("parameters", {})
+        risk_params = strategy_info.get("risk_management", {})
         
-        return parameters 
+        return {
+            "strategy_params": strategy_params,
+            "risk_params": risk_params
+        } 
