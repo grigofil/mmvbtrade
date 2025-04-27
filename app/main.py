@@ -6,6 +6,9 @@ import os
 import logging
 from datetime import datetime
 
+# Добавляем импорт для работы с .env
+from dotenv import load_dotenv
+
 from app.brokers.tinkoff import TinkoffAPI
 from app.brokers.bcs import BCSAPI
 from app.strategies.factory import StrategyFactory
@@ -13,10 +16,28 @@ from app.risk_management.risk_manager import RiskManager
 from app.logging import setup_logging
 from app.web.server import WebServer
 
+# Безопасная загрузка .env файла
+def safe_load_dotenv():
+    """
+    Safely load environment variables from .env file,
+    handling potential encoding issues
+    """
+    try:
+        # Пробуем стандартный метод
+        load_dotenv()
+    except UnicodeDecodeError:
+        # Если файл в неверной кодировке, выводим предупреждение
+        print("WARNING: Could not load .env file due to encoding issues.")
+        print("Create a new .env file with UTF-8 encoding using a text editor.")
+        print("Using default environment variables instead.")
+
 def main():
     """
     Main entry point for the trading bot
     """
+    # Безопасно загружаем переменные окружения
+    safe_load_dotenv()
+    
     parser = argparse.ArgumentParser(description='Trading Bot')
     
     # Logging arguments
@@ -38,8 +59,8 @@ def main():
     args = parser.parse_args()
     
     # Setup logging
-    log_level = getattr(logging, args.log_level)
-    setup_logging(console_level=log_level, file_level=logging.DEBUG)
+    # Обновленный вызов функции setup_logging с новой сигнатурой
+    setup_logging(console_level=args.log_level, log_dir='logs')
     
     logger = logging.getLogger(__name__)
     logger.info("Starting trading bot...")
@@ -72,13 +93,18 @@ def main():
     logger.info(f"Starting web server on {args.host}:{args.port}...")
     server = WebServer(
         host=args.host,
-        port=args.port,
-        broker_apis=broker_apis,
-        strategy_factory=strategy_factory,
-        risk_manager=risk_manager
+        port=args.port
     )
     
+    # Регистрация компонентов через соответствующие методы
+    for broker_name, broker_api in broker_apis.items():
+        server.register_broker(broker_name, broker_api)
+    
+    server.register_risk_manager(risk_manager)
+    
     try:
+        # Отключаем автоматическую загрузку .env внутри Flask (это уже сделано выше)
+        os.environ['FLASK_SKIP_DOTENV'] = '1'
         server.run()
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt. Shutting down...")
