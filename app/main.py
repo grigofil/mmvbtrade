@@ -51,6 +51,7 @@ def main():
     # Tinkoff API arguments
     parser.add_argument('--tinkoff-token', type=str, help='Tinkoff API token')
     parser.add_argument('--tinkoff-account', type=str, help='Tinkoff account ID')
+    parser.add_argument('--tinkoff-sandbox', action='store_true', help='Use Tinkoff sandbox environment')
     
     # BCS API arguments
     parser.add_argument('--bcs-token', type=str, help='BCS API token')
@@ -68,10 +69,22 @@ def main():
     # Initialize broker APIs
     broker_apis = {}
     
-    if args.tinkoff_token and args.tinkoff_account:
+    if args.tinkoff_token:
         logger.info("Initializing Tinkoff API...")
-        tinkoff_api = TinkoffAPI(token=args.tinkoff_token, account_id=args.tinkoff_account)
-        broker_apis['tinkoff'] = tinkoff_api
+        try:
+            # Исправляем параметры создания экземпляра TinkoffAPI
+            tinkoff_api = TinkoffAPI(token=args.tinkoff_token, use_sandbox=args.tinkoff_sandbox)
+            broker_apis['tinkoff'] = tinkoff_api
+            logger.info("Tinkoff API initialized successfully")
+            
+            # Попробуем получить список счетов для проверки
+            try:
+                accounts = tinkoff_api.get_accounts()
+                logger.info(f"Found {len(accounts)} Tinkoff accounts: {accounts}")
+            except Exception as e:
+                logger.error(f"Error getting Tinkoff accounts: {e}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Tinkoff API: {e}")
     
     if args.bcs_token and args.bcs_account:
         logger.info("Initializing BCS API...")

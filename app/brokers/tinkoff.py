@@ -25,12 +25,34 @@ class TinkoffAPI:
             use_sandbox: Whether to use sandbox environment
         """
         self.token = token
+        self.use_sandbox = use_sandbox
         self.base_url = self.SANDBOX_URL if use_sandbox else self.API_URL
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         })
+        logger.info(f"Initialized Tinkoff API client (Sandbox: {use_sandbox})")
+        
+        # Проверяем соединение сразу при инициализации
+        self.check_connection()
+    
+    def check_connection(self) -> bool:
+        """
+        Check connection to Tinkoff API
+        
+        Returns:
+            True if connection is successful, False otherwise
+        """
+        try:
+            accounts = self.get_accounts()
+            logger.info(f"Connection to Tinkoff API successful. Found {len(accounts)} accounts.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to Tinkoff API: {e}")
+            logger.debug(f"API URL: {self.base_url}, Sandbox mode: {self.use_sandbox}")
+            logger.debug(f"Token prefix: {self.token[:4]}{'*' * 16}")
+            return False
     
     def _request(self, method: str, endpoint: str, params: Dict = None, data: Dict = None) -> Dict:
         """
@@ -47,11 +69,28 @@ class TinkoffAPI:
         """
         url = f"{self.base_url}/{endpoint}"
         try:
+            logger.debug(f"Making {method} request to {url}")
             response = self.session.request(method=method, url=url, params=params, json=data)
+            
+            if response.status_code != 200:
+                logger.error(f"API request error: {response.status_code} - {response.text}")
+                
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            
+            # Проверяем ответ API на наличие ошибок
+            if result.get("status") == "Error":
+                error_msg = result.get("payload", {}).get("message", "Unknown API error")
+                logger.error(f"API returned error: {error_msg}")
+                raise Exception(f"Tinkoff API error: {error_msg}")
+                
+            return result
         except requests.exceptions.RequestException as e:
             logger.error(f"API request error: {e}")
+            # Добавляем больше информации для отладки
+            if hasattr(e, 'response') and e.response:
+                logger.error(f"Response code: {e.response.status_code}")
+                logger.error(f"Response text: {e.response.text}")
             raise
     
     def get_accounts(self) -> List[Dict]:
@@ -61,8 +100,14 @@ class TinkoffAPI:
         Returns:
             List of accounts
         """
-        response = self._request("GET", "user/accounts")
-        return response.get("payload", {}).get("accounts", [])
+        try:
+            response = self._request("GET", "user/accounts")
+            accounts = response.get("payload", {}).get("accounts", [])
+            logger.info(f"Retrieved {len(accounts)} accounts from Tinkoff API")
+            return accounts
+        except Exception as e:
+            logger.error(f"Error retrieving accounts: {e}")
+            return []
     
     def get_portfolio(self, account_id: str) -> Dict:
         """
