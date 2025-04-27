@@ -1,0 +1,457 @@
+/* Main styles for MMV Trading Bot Dashboard */
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --info-color: #17a2b8;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+    --sidebar-width: 250px;
+    --sidebar-collapsed-width: 70px;
+    --header-height: 60px;
+    --body-bg: #f5f7fb;
+    --card-bg: #ffffff;
+    --card-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --transition-speed: 0.3s;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--body-bg);
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+/* Wrapper & Content */
+.wrapper {
+    display: flex;
+    width: 100%;
+    align-items: stretch;
+}
+
+#content {
+    width: 100%;
+    padding: 0;
+    min-height: 100vh;
+    transition: all var(--transition-speed);
+}
+
+/* Sidebar Styles */
+#sidebar {
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    background: #2c3e50;
+    color: #fff;
+    transition: all var(--transition-speed);
+    position: relative;
+    z-index: 999;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#sidebar.collapsed {
+    min-width: var(--sidebar-collapsed-width);
+    max-width: var(--sidebar-collapsed-width);
+    text-align: center;
+}
+
+#sidebar.collapsed .sidebar-header h3 {
+    display: none;
+}
+
+#sidebar.collapsed .sidebar-brand-icon {
+    display: block;
+}
+
+#sidebar .sidebar-header {
+    padding: 20px;
+    background: #1a2530;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#sidebar .sidebar-brand-icon {
+    display: none;
+    font-size: 1.5rem;
+}
+
+#sidebar .sidebar-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 1.3rem;
+}
+
+#sidebar ul.components {
+    padding: 20px 0;
+    flex-grow: 1;
+}
+
+#sidebar ul p {
+    color: #fff;
+    padding: 10px;
+}
+
+#sidebar ul li a {
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    color: #d1d1d1;
+    text-decoration: none;
+    transition: all 0.3s;
+}
+
+#sidebar.collapsed ul li a {
+    padding: 12px;
+    text-align: center;
+    justify-content: center;
+}
+
+#sidebar.collapsed ul li a span {
+    display: none;
+}
+
+#sidebar ul li a:hover {
+    color: #fff;
+    background: #34495e;
+}
+
+#sidebar ul li.active > a {
+    color: #fff;
+    background: var(--primary-color);
+    border-left: 4px solid #fff;
+}
+
+#sidebar.collapsed ul li.active > a {
+    border-left: none;
+    border-right: 4px solid #fff;
+}
+
+#sidebar ul li a i {
+    margin-right: 15px;
+    width: 20px;
+    text-align: center;
+}
+
+#sidebar.collapsed ul li a i {
+    margin-right: 0;
+    font-size: 1.2rem;
+}
+
+/* Sidebar Footer */
+#sidebar .sidebar-footer {
+    padding: 15px;
+    background: #1a2530;
+    border-top: 1px solid #34495e;
+    font-size: 0.8rem;
+}
+
+#sidebar.collapsed .sidebar-footer {
+    display: none;
+}
+
+.server-status {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.status-dot {
+    height: 10px;
+    width: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.status-dot.online {
+    background-color: var(--success-color);
+}
+
+.status-dot.offline {
+    background-color: var(--danger-color);
+}
+
+.server-time {
+    display: flex;
+    align-items: center;
+}
+
+.server-time i {
+    margin-right: 8px;
+}
+
+/* Navbar */
+.navbar {
+    padding: 15px 10px;
+    background: #fff;
+    border: none;
+    border-radius: 0;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+#sidebarCollapse {
+    background: transparent;
+    border: none;
+    color: var(--dark-color);
+    font-size: 20px;
+}
+
+#sidebarCollapse:hover {
+    color: var(--primary-color);
+}
+
+/* Dashboard Content */
+.dashboard-content {
+    padding: 20px;
+}
+
+/* Cards */
+.card {
+    border-radius: 8px;
+    border: none;
+    box-shadow: var(--card-shadow);
+    margin-bottom: 20px;
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.card-actions {
+    display: flex;
+    align-items: center;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+.card-footer {
+    background-color: transparent;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    padding: 10px 20px;
+}
+
+/* Overview Cards Styling */
+.card-stat {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.card-stat-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.card-stat-label {
+    color: var(--secondary-color);
+    font-size: 0.85rem;
+}
+
+.card-stat-icon {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 45px;
+    width: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.card-stat-icon i {
+    font-size: 1.2rem;
+}
+
+/* Charts */
+.chart-container {
+    width: 100%;
+    height: 300px;
+    position: relative;
+}
+
+/* Tables */
+.table-responsive {
+    overflow-x: auto;
+}
+
+.table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    border-top: none;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Badge styling */
+.badge {
+    padding: 0.4em 0.65em;
+    font-weight: 500;
+}
+
+/* Button Groups & Buttons */
+.btn-group-sm>.btn, .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.765rem;
+}
+
+.refresh-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+/* Modal styling */
+.modal-content {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    padding: 15px 20px;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    border-top: 1px solid rgba(0,0,0,0.05);
+    padding: 15px 20px;
+}
+
+/* Form Controls */
+.form-select, .form-control {
+    padding: 0.45rem 0.75rem;
+    font-size: 0.9rem;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 4px;
+}
+
+.form-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+/* Spinner Overlay */
+.spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    display: none;
+}
+
+.spinner-overlay.show {
+    display: flex;
+}
+
+/* Toast Notifications */
+.toast {
+    border: none;
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+}
+
+.toast-header {
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    #sidebar {
+        min-width: var(--sidebar-collapsed-width);
+        max-width: var(--sidebar-collapsed-width);
+        text-align: center;
+    }
+    
+    #sidebar.active {
+        min-width: var(--sidebar-width);
+        max-width: var(--sidebar-width);
+        text-align: left;
+    }
+    
+    #sidebar .sidebar-header h3,
+    #sidebar.active .sidebar-header h3 {
+        display: none;
+    }
+    
+    #sidebar .sidebar-brand-icon,
+    #sidebar.active .sidebar-brand-icon {
+        display: block;
+    }
+    
+    #sidebar ul li a {
+        padding: 12px;
+        justify-content: center;
+    }
+    
+    #sidebar.active ul li a {
+        padding: 12px 20px;
+        justify-content: flex-start;
+    }
+    
+    #sidebar ul li a span {
+        display: none;
+    }
+    
+    #sidebar.active ul li a span {
+        display: inline-block;
+    }
+    
+    #sidebar ul li a i {
+        margin-right: 0;
+        font-size: 1.2rem;
+    }
+    
+    #sidebar.active ul li a i {
+        margin-right: 15px;
+        font-size: 1rem;
+    }
+    
+    #sidebar .sidebar-footer {
+        display: none;
+    }
+    
+    #sidebar.active .sidebar-footer {
+        display: block;
+    }
+} 
