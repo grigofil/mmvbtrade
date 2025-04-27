@@ -1,5 +1,62 @@
-flask==2.3.2
-numpy==1.24.3
-pandas==2.0.1
+# Основные зависимости
+Flask==2.2.5
+Flask-RESTful==0.3.10
+Flask-SQLAlchemy==3.0.5
+Flask-Migrate==4.0.5
+flask-cors==4.0.0
+Werkzeug==2.3.7
+SQLAlchemy==2.0.23
+SQLAlchemy-Utils==0.41.1
+
+# Аутентификация
+Flask-JWT-Extended==4.5.3
+passlib==1.7.4
+bcrypt==4.1.1
+
+# Работа с API брокеров
+tinkoff-investments==0.2.0b49
+bcs-api==0.1.5
+pandas==2.0.3
+numpy==1.24.4
 requests==2.31.0
-matplotlib==3.7.1 
+aiohttp==3.8.6
+
+# Технический анализ
+pandas-ta==0.3.14b0
+# Optional: TA-Lib (устанавливается отдельно)
+
+# Асинхронное выполнение и планирование задач
+celery==5.3.5
+redis==5.0.1
+APScheduler==3.10.4
+
+# Логирование и управление конфигурацией
+python-dotenv==1.0.0
+pyyaml==6.0.1
+colorlog==6.7.0
+
+# Работа с данными
+matplotlib==3.7.3
+plotly==5.18.0
+openpyxl==3.1.2
+pytz==2023.3.post1
+
+# Уведомления
+python-telegram-bot==20.6
+aiosmtplib==2.0.2
+
+# Тестирование
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Инструменты разработки
+flake8==6.1.0
+black==23.10.1
+isort==5.12.0
+mypy==1.6.1
+pre-commit==3.5.0
+
+# Бэктестинг
+backtrader==1.9.78.123
+vectorbt==0.24.5 
