@@ -8,6 +8,8 @@ import os
 import json
 from flask import Flask, request, jsonify, render_template, send_from_directory
 
+from app.strategies import StrategyFactory
+
 logger = logging.getLogger(__name__)
 
 class WebServer:
@@ -46,6 +48,10 @@ class WebServer:
         self.strategies = {}
         self.risk_manager = None
         self.trade_logger = None
+        
+        # Store active trading sessions
+        self.active_sessions = {}
+        self.next_session_id = 1
         
         logger.info(f"Initialized WebServer on {host}:{port}")
     
@@ -140,14 +146,38 @@ class WebServer:
         # API endpoint for available strategies
         @self.app.route('/api/strategies', methods=['GET'])
         def get_strategies():
-            strategy_list = []
-            for name, strategy in self.strategies.items():
-                strategy_list.append({
-                    'name': name,
-                    'type': strategy.__class__.__name__
-                })
+            # Use the StrategyFactory to get available strategies
+            available_strategies = StrategyFactory.get_available_strategies()
             
-            return jsonify(strategy_list)
+            # Add additional information from registered strategies
+            for strategy_info in available_strategies:
+                strategy_id = strategy_info['id']
+                if strategy_id in self.strategies:
+                    strategy = self.strategies[strategy_id]
+                    strategy_info.update({
+                        'parameters': strategy.get_strategy_info().get('parameters', {}),
+                        'active': True
+                    })
+                else:
+                    # Get default parameters from factory
+                    strategy_info['parameters'] = StrategyFactory.get_strategy_parameters(strategy_id)
+                    strategy_info['active'] = False
+            
+            return jsonify(available_strategies)
+        
+        # API endpoint for strategy details
+        @self.app.route('/api/strategies/<strategy_id>', methods=['GET'])
+        def get_strategy_details(strategy_id):
+            if strategy_id in self.strategies:
+                strategy = self.strategies[strategy_id]
+                return jsonify(strategy.get_strategy_info())
+            elif strategy_id in StrategyFactory.STRATEGY_REGISTRY:
+                # Create a temporary instance to get info
+                temp_strategy = StrategyFactory.create_strategy(strategy_id)
+                if temp_strategy:
+                    return jsonify(temp_strategy.get_strategy_info())
+            
+            return jsonify({"error": f"Strategy {strategy_id} not found"}), 404
         
         # API endpoint for starting a trading session
         @self.app.route('/api/trading_session/start', methods=['POST'])
@@ -164,12 +194,44 @@ class WebServer:
             if data['broker'] not in self.brokers:
                 return jsonify({"error": f"Broker {data['broker']} not found"}), 404
             
-            if data['strategy'] not in self.strategies:
-                return jsonify({"error": f"Strategy {data['strategy']} not found"}), 404
+            strategy_id = data['strategy']
             
-            # This would actually start a trading session in a real implementation
-            # For now, just return success
-            return jsonify({"status": "success", "message": "Trading session started"})
+            # Get or create strategy
+            if strategy_id in self.strategies:
+                strategy = self.strategies[strategy_id]
+            else:
+                # Get parameters from request
+                parameters = data.get('parameters', {})
+                strategy = StrategyFactory.create_strategy(strategy_id, **parameters)
+                
+                if not strategy:
+                    return jsonify({"error": f"Failed to create strategy {strategy_id}"}), 500
+                
+                # Register the strategy
+                self.strategies[strategy_id] = strategy
+            
+            # Create session
+            session_id = str(self.next_session_id)
+            self.next_session_id += 1
+            
+            self.active_sessions[session_id] = {
+                'id': session_id,
+                'broker': data['broker'],
+                'account_id': data['account_id'],
+                'strategy': strategy_id,
+                'instruments': data['instruments'],
+                'parameters': data.get('parameters', {}),
+                'status': 'running',
+                'started_at': datetime.now().isoformat()
+            }
+            
+            logger.info(f"Started trading session {session_id} with strategy {strategy_id}")
+            
+            return jsonify({
+                "status": "success", 
+                "message": "Trading session started",
+                "session_id": session_id
+            })
         
         # API endpoint for stopping a trading session
         @self.app.route('/api/trading_session/stop', methods=['POST'])
@@ -182,9 +244,33 @@ class WebServer:
                 if field not in data:
                     return jsonify({"error": f"Missing required field: {field}"}), 400
             
-            # This would actually stop a trading session in a real implementation
-            # For now, just return success
-            return jsonify({"status": "success", "message": "Trading session stopped"})
+            session_id = data['session_id']
+            
+            if session_id not in self.active_sessions:
+                return jsonify({"error": f"Trading session {session_id} not found"}), 404
+            
+            # Update session status
+            self.active_sessions[session_id]['status'] = 'stopped'
+            self.active_sessions[session_id]['stopped_at'] = datetime.now().isoformat()
+            
+            logger.info(f"Stopped trading session {session_id}")
+            
+            return jsonify({
+                "status": "success", 
+                "message": "Trading session stopped"
+            })
+        
+        # API endpoint for active trading sessions
+        @self.app.route('/api/trading_sessions', methods=['GET'])
+        def get_trading_sessions():
+            status_filter = request.args.get('status')
+            
+            sessions = list(self.active_sessions.values())
+            
+            if status_filter:
+                sessions = [s for s in sessions if s['status'] == status_filter]
+            
+            return jsonify(sessions)
     
     def register_broker(self, name: str, broker_instance: Any):
         """

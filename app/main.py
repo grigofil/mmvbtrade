@@ -8,7 +8,7 @@ from datetime import datetime
 
 from app.brokers.tinkoff import TinkoffAPI
 from app.brokers.bcs import BCSAPI
-from app.strategies.moving_average import MovingAverageStrategy
+from app.strategies import StrategyFactory
 from app.risk_management.risk_manager import RiskManager
 from app.logging.trade_logger import TradeLogger
 from app.web.server import WebServer
@@ -69,6 +69,11 @@ def main():
     parser.add_argument('--bcs-client-secret', type=str, default=os.environ.get('BCS_CLIENT_SECRET', ''),
                         help='BCS API client secret')
     
+    # Add strategy configuration
+    parser.add_argument('--strategy', type=str, default='moving_average',
+                        choices=list(StrategyFactory.STRATEGY_REGISTRY.keys()),
+                        help='Trading strategy to use')
+    
     args = parser.parse_args()
     
     # Configure logging
@@ -103,8 +108,23 @@ def main():
     else:
         logger.warning("BCS API credentials not provided, BCS broker will not be available")
     
-    # Initialize strategy
-    moving_avg_strategy = MovingAverageStrategy(fast_period=10, slow_period=30)
+    # Initialize strategies using factory
+    strategies = {}
+    
+    # Add moving average strategy
+    moving_avg_strategy = StrategyFactory.create_strategy('moving_average', 
+                                                        fast_period=10, 
+                                                        slow_period=30)
+    if moving_avg_strategy:
+        strategies['moving_average'] = moving_avg_strategy
+    
+    # Add mean reversion strategy
+    mean_reversion_strategy = StrategyFactory.create_strategy('mean_reversion',
+                                                            lookback_period=20,
+                                                            std_dev=2.0,
+                                                            rsi_period=14)
+    if mean_reversion_strategy:
+        strategies['mean_reversion'] = mean_reversion_strategy
     
     # Initialize risk manager
     risk_manager = RiskManager(
@@ -130,9 +150,17 @@ def main():
     for name, broker in brokers.items():
         web_server.register_broker(name, broker)
     
-    web_server.register_strategy("moving_average", moving_avg_strategy)
+    for name, strategy in strategies.items():
+        web_server.register_strategy(name, strategy)
+    
     web_server.register_risk_manager(risk_manager)
     web_server.register_trade_logger(trade_logger)
+    
+    # Log available strategies
+    available_strategies = StrategyFactory.get_available_strategies()
+    logger.info(f"Available strategies: {len(available_strategies)}")
+    for strategy in available_strategies:
+        logger.info(f"  - {strategy['id']}: {strategy['name']} - {strategy['description']}")
     
     # Run web server
     logger.info(f"Starting web server on {args.host}:{args.port}")
