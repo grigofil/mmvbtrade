@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # Development configuration for API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount the entire app directory for development
+      - ./app:/app/app
+      - ./requirements.txt:/app/requirements.txt
+      - ./logs:/app/logs
+      - ./data:/app/data
+    environment:
+      - DEBUG=true
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    ports:
+      - "5000:5000"
+    command: flask --app app.web.app:app run --host=0.0.0.0 --port=5000 --debug
+
+  # Development configuration for worker
+  worker:
+    volumes:
+      # Mount the entire app directory for development
+      - ./app:/app/app
+      - ./requirements.txt:/app/requirements.txt
+      - ./logs:/app/logs
+      - ./data:/app/data
+    environment:
+      - DEBUG=true
+
+  # Development configuration for scheduler
+  scheduler:
+    volumes:
+      # Mount the entire app directory for development
+      - ./app:/app/app
+      - ./requirements.txt:/app/requirements.txt
+      - ./logs:/app/logs
+      - ./data:/app/data
+    environment:
+      - DEBUG=true 

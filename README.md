@@ -22,6 +22,8 @@
 
 ## Установка
 
+### Обычная установка
+
 1. Клонируйте репозиторий:
 ```
 git clone https://github.com/username/mmvbtrade.git
@@ -40,7 +42,29 @@ pip install -r requirements.txt
    - Для Тинькофф: [Документация Tinkoff Invest API](https://tinkoff.github.io/invest-openapi/)
    - Для БКС: [Документация BCS API](https://bcs.ru/api) (может потребоваться обновить URL)
 
+### Docker установка
+
+Для запуска через Docker:
+
+1. Клонируйте репозиторий:
+```
+git clone https://github.com/username/mmvbtrade.git
+cd mmvbtrade
+```
+
+2. Создайте файл `.env` с вашими API ключами и настройками (используйте `.env.example` как шаблон)
+
+3. Соберите и запустите через Docker Compose:
+```
+docker-compose build
+docker-compose up -d
+```
+
+Подробную информацию о Docker-конфигурации смотрите в [DOCKER.md](DOCKER.md).
+
 ## Запуск
+
+### Обычный запуск
 
 1. Запустите приложение с указанием API ключей:
 ```
@@ -58,6 +82,19 @@ python -m app.main
 
 2. Откройте веб-интерфейс: http://localhost:5000
 
+### Запуск через Docker
+
+```bash
+# Запуск всех сервисов
+docker-compose up -d
+
+# Запуск только API-сервера
+docker-compose up -d api
+
+# Просмотр логов
+docker-compose logs -f
+```
+
 ## Конфигурация
 
 Параметры командной строки:
@@ -72,6 +109,8 @@ python -m app.main
 ## Безопасность
 
 **Важно!** Никогда не храните API ключи в коде или публичных репозиториях. Используйте переменные окружения или защищенные хранилища секретов.
+
+При использовании Docker, храните секреты в файле `.env`, который не включен в систему контроля версий.
 
 ## Дисклеймер
 

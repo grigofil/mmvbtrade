@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # API Service
+  # API Service - Web interface and REST API
   api:
     build:
       context: .
@@ -14,6 +14,8 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+      # Uncomment to mount your configuration file
+      # - ./config.py:/app/config.py:ro
     env_file:
       - .env
     environment:
@@ -23,8 +25,14 @@ services:
       - redis
     networks:
       - mmvnet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # Worker Service (background processing)
+  # Worker Service - Background processing for trading operations
   worker:
     build:
       context: .
@@ -35,6 +43,8 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+      # Uncomment to mount your configuration file
+      # - ./config.py:/app/config.py:ro
     env_file:
       - .env
     command: worker
@@ -43,7 +53,7 @@ services:
     networks:
       - mmvnet
 
-  # Scheduler Service (periodic tasks)
+  # Scheduler Service - Runs periodic tasks like data fetching
   scheduler:
     build:
       context: .
@@ -54,6 +64,8 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+      # Uncomment to mount your configuration file
+      # - ./config.py:/app/config.py:ro
     env_file:
       - .env
     command: scheduler
@@ -62,7 +74,7 @@ services:
     networks:
       - mmvnet
 
-  # Redis for caching and message queue
+  # Redis for caching, message queue and task management
   redis:
     image: redis:6-alpine
     container_name: mmvtrade-redis
@@ -74,10 +86,17 @@ services:
     command: redis-server --appendonly yes
     networks:
       - mmvnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   mmvnet:
     driver: bridge
 
 volumes:
-  redis_data: 
+  redis_data:
+    # Persist Redis data between container restarts
+    driver: local 
