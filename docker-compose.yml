@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mmvtrade:latest
+    container_name: mmvtrade-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - RUN_MIGRATIONS=true
+    command: api
+    depends_on:
+      - redis
+    networks:
+      - mmvnet
+
+  # Worker Service (background processing)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mmvtrade:latest
+    container_name: mmvtrade-worker
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    env_file:
+      - .env
+    command: worker
+    depends_on:
+      - redis
+    networks:
+      - mmvnet
+
+  # Scheduler Service (periodic tasks)
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mmvtrade:latest
+    container_name: mmvtrade-scheduler
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    env_file:
+      - .env
+    command: scheduler
+    depends_on:
+      - redis
+    networks:
+      - mmvnet
+
+  # Redis for caching and message queue
+  redis:
+    image: redis:6-alpine
+    container_name: mmvtrade-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - mmvnet
+
+networks:
+  mmvnet:
+    driver: bridge
+
+volumes:
+  redis_data: 

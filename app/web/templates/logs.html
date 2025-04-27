@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - MMV Trading Bot{% endblock %}
+
+{% block content %}
+<div class="container-fluid dashboard-content">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2>System Logs</h2>
+                <div>
+                    <button class="btn btn-outline-primary refresh-logs" onclick="refreshLogs()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="downloadLogs()">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#clearLogsModal">
+                        <i class="fas fa-trash-alt"></i> Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Log Files</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush log-files">
+                        {% for log_file in log_files %}
+                        <a href="#" class="list-group-item list-group-item-action {% if loop.first %}active{% endif %}" 
+                           data-file="{{ log_file.filename }}" onclick="loadLogFile('{{ log_file.filename }}')">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ log_file.display_name }}</h6>
+                                <small>{{ log_file.size }}</small>
+                            </div>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar-alt me-1"></i> {{ log_file.modified }}
+                            </small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="card-title">Log Filters</h5>
+                </div>
+                <div class="card-body">
+                    <form id="logFilterForm">
+                        <div class="mb-3">
+                            <label for="logLevel" class="form-label">Log Level</label>
+                            <select class="form-select" id="logLevel" onchange="applyFilters()">
+                                <option value="all">All Levels</option>
+                                <option value="debug">Debug & Above</option>
+                                <option value="info">Info & Above</option>
+                                <option value="warning">Warning & Above</option>
+                                <option value="error">Error & Above</option>
+                                <option value="critical">Critical Only</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="searchText" class="form-label">Search Text</label>
+                            <input type="text" class="form-control" id="searchText" placeholder="Filter logs...">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="dateRange" class="form-label">Date Range</label>
+                            <select class="form-select" id="dateRange" onchange="applyFilters()">
+                                <option value="all">All Time</option>
+                                <option value="today">Today</option>
+                                <option value="yesterday">Yesterday</option>
+                                <option value="week">Last 7 Days</option>
+                                <option value="month">Last 30 Days</option>
+                            </select>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-primary" onclick="applyFilters()">
+                                <i class="fas fa-filter"></i> Apply Filters
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title" id="currentLogTitle">mmvbot.log</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="autoRefresh">
+                            <label class="form-check-label" for="autoRefresh">Auto-refresh</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="log-container">
+                        <pre id="logContent" class="log-content">Loading logs...</pre>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between">
+                    <div>
+                        <span id="logStats">0 lines</span>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="scrollToTop()">
+                            <i class="fas fa-arrow-up"></i> Top
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="scrollToBottom()">
+                            <i class="fas fa-arrow-down"></i> Bottom
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Logs Modal -->
+<div class="modal fade" id="clearLogsModal" tabindex="-1" aria-labelledby="clearLogsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clearLogsModalLabel">Clear Logs</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to clear the current log file?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="clearCurrentLog()">Clear Log</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentLogFile = '{{ log_files[0].filename if log_files else "mmvbot.log" }}';
+    let autoRefreshInterval = null;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load first log file
+        loadLogFile(currentLogFile);
+        
+        // Search text event listener
+        document.getElementById('searchText').addEventListener('input', debounce(applyFilters, 300));
+        
+        // Auto-refresh toggle
+        document.getElementById('autoRefresh').addEventListener('change', function() {
+            if (this.checked) {
+                autoRefreshInterval = setInterval(function() {
+                    refreshLogs(false);
+                }, 5000);  // Refresh every 5 seconds
+            } else {
+                clearInterval(autoRefreshInterval);
+            }
+        });
+    });
+    
+    function loadLogFile(filename) {
+        currentLogFile = filename;
+        document.getElementById('currentLogTitle').textContent = filename;
+        
+        // Update active class in sidebar
+        document.querySelectorAll('.log-files a').forEach(el => {
+            el.classList.remove('active');
+        });
+        document.querySelector(`.log-files a[data-file="${filename}"]`).classList.add('active');
+        
+        refreshLogs();
+    }
+    
+    function refreshLogs(showSpinner = true) {
+        if (showSpinner) {
+            document.getElementById('logContent').innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><div class="mt-2">Loading logs...</div></div>';
+        }
+        
+        // Get filter values
+        const level = document.getElementById('logLevel').value;
+        const searchText = document.getElementById('searchText').value;
+        const dateRange = document.getElementById('dateRange').value;
+        
+        fetch(`/api/logs/${currentLogFile}?level=${level}&search=${searchText}&date_range=${dateRange}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayLogContent(data.content, data.lines);
+                } else {
+                    document.getElementById('logContent').textContent = 'Error loading logs: ' + data.message;
+                    document.getElementById('logStats').textContent = '0 lines';
+                }
+            })
+            .catch(error => {
+                document.getElementById('logContent').textContent = 'Error loading logs: ' + error;
+                document.getElementById('logStats').textContent = '0 lines';
+            });
+    }
+    
+    function displayLogContent(content, lineCount) {
+        const logContent = document.getElementById('logContent');
+        logContent.innerHTML = '';
+        
+        if (!content || content.length === 0) {
+            logContent.textContent = 'No log entries found matching the filter criteria.';
+            document.getElementById('logStats').textContent = '0 lines';
+            return;
+        }
+        
+        // Process and highlight log lines
+        const lines = content.split('\n');
+        lines.forEach(line => {
+            if (line.trim() === '') return;
+            
+            const lineElement = document.createElement('div');
+            lineElement.className = 'log-line';
+            
+            // Add classes based on log level
+            if (line.includes(' - DEBUG - ')) {
+                lineElement.classList.add('log-debug');
+            } else if (line.includes(' - INFO - ')) {
+                lineElement.classList.add('log-info');
+            } else if (line.includes(' - WARNING - ')) {
+                lineElement.classList.add('log-warning');
+            } else if (line.includes(' - ERROR - ')) {
+                lineElement.classList.add('log-error');
+            } else if (line.includes(' - CRITICAL - ')) {
+                lineElement.classList.add('log-critical');
+            }
+            
+            lineElement.textContent = line;
+            logContent.appendChild(lineElement);
+        });
+        
+        document.getElementById('logStats').textContent = `${lineCount} lines`;
+        
+        // Scroll to bottom by default
+        scrollToBottom();
+    }
+    
+    function applyFilters() {
+        refreshLogs();
+    }
+    
+    function clearCurrentLog() {
+        if (!confirm(`Are you sure you want to clear the ${currentLogFile} log file? This action cannot be undone.`)) {
+            return;
+        }
+        
+        fetch(`/api/logs/${currentLogFile}/clear`, {
+            method: 'POST'
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Log file cleared successfully', 'success');
+                    refreshLogs();
+                } else {
+                    showToast('Error clearing log file: ' + data.message, 'error');
+                }
+                
+                // Close the modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('clearLogsModal'));
+                modal.hide();
+            })
+            .catch(error => {
+                showToast('Error clearing log file: ' + error, 'error');
+            });
+    }
+    
+    function downloadLogs() {
+        const a = document.createElement('a');
+        a.href = `/api/logs/${currentLogFile}/download`;
+        a.download = currentLogFile;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+    
+    function scrollToTop() {
+        document.querySelector('.log-container').scrollTop = 0;
+    }
+    
+    function scrollToBottom() {
+        const container = document.querySelector('.log-container');
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    // Debounce function for search input
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+</script>
+
+<style>
+    .log-container {
+        height: 600px;
+        overflow-y: auto;
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 0;
+    }
+    
+    .log-content {
+        padding: 16px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin: 0;
+        white-space: pre-wrap;
+    }
+    
+    .log-line {
+        padding: 1px 0;
+    }
+    
+    .log-debug {
+        color: #6c757d;
+    }
+    
+    .log-info {
+        color: #4fb3ff;
+    }
+    
+    .log-warning {
+        color: #ffc107;
+    }
+    
+    .log-error {
+        color: #ff8d85;
+    }
+    
+    .log-critical {
+        color: #ff5858;
+        font-weight: bold;
+    }
+    
+    .log-files .list-group-item {
+        padding: 10px 15px;
+    }
+    
+    .log-files .active {
+        background-color: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+        border-color: rgba(13, 110, 253, 0.2);
+    }
+    
+    #logStats {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %} 
