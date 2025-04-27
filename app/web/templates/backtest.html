@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backtesting - MMV Trading Bot</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Date Range Picker -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+</head>
+<body>
+    <div class="wrapper">
+        <!-- Sidebar -->
+        <nav id="sidebar">
+            <div class="sidebar-header">
+                <h3>MMV Trade</h3>
+                <div class="sidebar-brand-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+            </div>
+
+            <ul class="list-unstyled components">
+                <li>
+                    <a href="{{ url_for('dashboard') }}">
+                        <i class="fas fa-tachometer-alt"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('sessions') }}">
+                        <i class="fas fa-exchange-alt"></i>
+                        Trading Sessions
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('strategies') }}">
+                        <i class="fas fa-chess"></i>
+                        Strategies
+                    </a>
+                </li>
+                <li class="active">
+                    <a href="{{ url_for('backtest') }}">
+                        <i class="fas fa-vial"></i>
+                        Backtesting
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('markets') }}">
+                        <i class="fas fa-globe"></i>
+                        Markets
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('reports') }}">
+                        <i class="fas fa-chart-pie"></i>
+                        Reports
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('settings') }}">
+                        <i class="fas fa-cog"></i>
+                        Settings
+                    </a>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <div class="server-status">
+                    <span class="status-dot online"></span>
+                    <span>Server: Online</span>
+                </div>
+                <div class="server-time">
+                    <i class="far fa-clock"></i>
+                    <span id="serverTime"></span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Page Content -->
+        <div id="content">
+            <!-- Navbar -->
+            <nav class="navbar navbar-expand-lg navbar-light">
+                <div class="container-fluid">
+                    <button type="button" id="sidebarCollapse" class="btn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    
+                    <div class="d-flex align-items-center">
+                        <button type="button" class="btn btn-primary" id="runBacktestBtn">
+                            <i class="fas fa-play"></i> Run Backtest
+                        </button>
+                        
+                        <div class="dropdown ms-3">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user-circle"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton">
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Settings</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Backtest Content -->
+            <div class="container-fluid dashboard-content">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="page-title">
+                            <h1>Strategy Backtesting</h1>
+                            <p class="lead">Test your trading strategies against historical data</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-xl-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title">Backtest Configuration</h5>
+                            </div>
+                            <div class="card-body">
+                                <form id="backtestForm">
+                                    <div class="mb-3">
+                                        <label for="strategySelect" class="form-label">Trading Strategy</label>
+                                        <select class="form-select" id="strategySelect" required>
+                                            <option value="" selected disabled>Select a strategy</option>
+                                            <option value="moving_average">Moving Average Crossover</option>
+                                            <option value="mean_reversion">Mean Reversion</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="instrumentSelect" class="form-label">Instrument</label>
+                                        <select class="form-select" id="instrumentSelect" required>
+                                            <option value="" selected disabled>Select an instrument</option>
+                                            <!-- Instrument options will be populated via JavaScript -->
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="dateRange" class="form-label">Time Period</label>
+                                        <input type="text" class="form-control" id="dateRange" required>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="timeframeSelect" class="form-label">Timeframe</label>
+                                        <select class="form-select" id="timeframeSelect" required>
+                                            <option value="1m">1 Minute</option>
+                                            <option value="5m">5 Minutes</option>
+                                            <option value="15m">15 Minutes</option>
+                                            <option value="30m">30 Minutes</option>
+                                            <option value="1h" selected>1 Hour</option>
+                                            <option value="4h">4 Hours</option>
+                                            <option value="1d">1 Day</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="initialCapital" class="form-label">Initial Capital</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input type="number" class="form-control" id="initialCapital" value="10000" min="100" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <hr>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="showAdvancedOptions">
+                                            <label class="form-check-label" for="showAdvancedOptions">Show Advanced Options</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="advancedOptions" class="d-none">
+                                        <div class="mb-3">
+                                            <label for="commissionRate" class="form-label">Commission Rate (%)</label>
+                                            <input type="number" class="form-control" id="commissionRate" value="0.1" min="0" max="5" step="0.01">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="slippageRate" class="form-label">Slippage Rate (%)</label>
+                                            <input type="number" class="form-control" id="slippageRate" value="0.05" min="0" max="2" step="0.01">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="optimizeParameters" value="1">
+                                                <label class="form-check-label" for="optimizeParameters">
+                                                    Optimize Strategy Parameters
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="strategyParams">
+                                        <!-- Strategy-specific parameters will be loaded here -->
+                                    </div>
+                                    
+                                    <div class="d-grid mt-4">
+                                        <button type="submit" class="btn btn-primary" id="startBacktestBtn">
+                                            <i class="fas fa-play-circle me-2"></i>Start Backtest
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-xl-8">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="card-title">Backtest Results</h5>
+                                <div class="card-tools">
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="exportReportBtn">
+                                            <i class="fas fa-file-export me-1"></i> Export Report
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="saveStrategyBtn">
+                                            <i class="fas fa-save me-1"></i> Save Strategy
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="backtestSpinner" class="text-center d-none">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Running backtest...</span>
+                                    </div>
+                                    <p class="mt-2">Running backtest...</p>
+                                </div>
+                                
+                                <div id="noBacktestData" class="text-center py-5">
+                                    <i class="fas fa-chart-area fa-4x text-muted mb-3"></i>
+                                    <h4 class="text-muted">No Backtest Data</h4>
+                                    <p>Configure and run a backtest to see results</p>
+                                </div>
+                                
+                                <div id="backtestResults" class="d-none">
+                                    <!-- Results tabs -->
+                                    <ul class="nav nav-tabs" id="resultTabs" role="tablist">
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link active" id="performance-tab" data-bs-toggle="tab" data-bs-target="#performance" type="button" role="tab">Performance</button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="trades-tab" data-bs-toggle="tab" data-bs-target="#trades" type="button" role="tab">Trades</button>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <button class="nav-link" id="metrics-tab" data-bs-toggle="tab" data-bs-target="#metrics" type="button" role="tab">Metrics</button>
+                                        </li>
+                                    </ul>
+                                    
+                                    <div class="tab-content p-3" id="resultTabsContent">
+                                        <!-- Performance Tab -->
+                                        <div class="tab-pane fade show active" id="performance" role="tabpanel">
+                                            <div class="row">
+                                                <div class="col-12 mb-4">
+                                                    <div class="chart-container" style="position: relative; height:300px;">
+                                                        <canvas id="equityCurveChart"></canvas>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="chart-container" style="position: relative; height:200px;">
+                                                        <canvas id="monthlyReturnsChart"></canvas>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="chart-container" style="position: relative; height:200px;">
+                                                        <canvas id="drawdownChart"></canvas>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Trades Tab -->
+                                        <div class="tab-pane fade" id="trades" role="tabpanel">
+                                            <div class="table-responsive">
+                                                <table class="table table-striped" id="tradesTable">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>#</th>
+                                                            <th>Entry Date</th>
+                                                            <th>Exit Date</th>
+                                                            <th>Type</th>
+                                                            <th>Entry Price</th>
+                                                            <th>Exit Price</th>
+                                                            <th>Size</th>
+                                                            <th>Profit/Loss</th>
+                                                            <th>Profit/Loss %</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <!-- Trade data will be filled via JavaScript -->
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Metrics Tab -->
+                                        <div class="tab-pane fade" id="metrics" role="tabpanel">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <table class="table table-sm">
+                                                        <tbody>
+                                                            <tr>
+                                                                <th>Total Return</th>
+                                                                <td id="metricTotalReturn">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Annualized Return</th>
+                                                                <td id="metricAnnualizedReturn">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Sharpe Ratio</th>
+                                                                <td id="metricSharpeRatio">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Max Drawdown</th>
+                                                                <td id="metricMaxDrawdown">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Win Rate</th>
+                                                                <td id="metricWinRate">-</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <table class="table table-sm">
+                                                        <tbody>
+                                                            <tr>
+                                                                <th>Total Trades</th>
+                                                                <td id="metricTotalTrades">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Profit Factor</th>
+                                                                <td id="metricProfitFactor">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Average Trade</th>
+                                                                <td id="metricAvgTrade">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Avg Winning Trade</th>
+                                                                <td id="metricAvgWinTrade">-</td>
+                                                            </tr>
+                                                            <tr>
+                                                                <th>Avg Losing Trade</th>
+                                                                <td id="metricAvgLossTrade">-</td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Date Range Picker -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/backtest.js') }}"></script>
+</body>
+</html> 

@@ -8,7 +8,7 @@ import os
 import json
 from flask import Flask, request, jsonify, render_template, send_from_directory
 
-from app.strategies import StrategyFactory
+from app.strategies import StrategyFactory, Backtest
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,50 @@ class WebServer:
         @self.app.route('/')
         def index():
             return render_template('index.html')
+            
+        # Dashboard page
+        @self.app.route('/dashboard')
+        def dashboard():
+            return render_template('dashboard.html', 
+                                  portfolio_value=10000,
+                                  portfolio_change=2.5,
+                                  active_sessions=2,
+                                  total_sessions=5,
+                                  trades_today=12,
+                                  last_trade_time="2 hours ago",
+                                  profit_percentage=15.8,
+                                  profit_amount=1580,
+                                  period="This Month")
+                                  
+        # Trading sessions page
+        @self.app.route('/sessions')
+        def sessions():
+            return render_template('dashboard.html')  # Placeholder - create sessions.html
+            
+        # Strategies page
+        @self.app.route('/strategies')
+        def strategies():
+            return render_template('dashboard.html')  # Placeholder - create strategies.html
+            
+        # Backtesting page
+        @self.app.route('/backtest')
+        def backtest():
+            return render_template('backtest.html')
+            
+        # Markets page
+        @self.app.route('/markets')
+        def markets():
+            return render_template('dashboard.html')  # Placeholder - create markets.html
+            
+        # Reports page
+        @self.app.route('/reports')
+        def reports():
+            return render_template('dashboard.html')  # Placeholder - create reports.html
+            
+        # Settings page
+        @self.app.route('/settings')
+        def settings():
+            return render_template('dashboard.html')  # Placeholder - create settings.html
         
         # API endpoints for broker accounts
         @self.app.route('/api/accounts', methods=['GET'])
@@ -179,6 +223,154 @@ class WebServer:
             
             return jsonify({"error": f"Strategy {strategy_id} not found"}), 404
         
+        # API endpoint for market instruments
+        @self.app.route('/api/instruments', methods=['GET'])
+        def get_instruments():
+            # Get broker parameter (optional)
+            broker_name = request.args.get('broker')
+            
+            instruments = []
+            if broker_name and broker_name in self.brokers:
+                # Get instruments from specific broker
+                try:
+                    broker = self.brokers[broker_name]
+                    for instrument_type in ['Stock', 'Bond', 'ETF', 'Currency']:
+                        instruments.extend(broker.get_market_instruments(instrument_type))
+                except Exception as e:
+                    logger.error(f"Error getting instruments from {broker_name}: {e}")
+            else:
+                # Get instruments from all brokers
+                for broker_name, broker in self.brokers.items():
+                    try:
+                        for instrument_type in ['Stock', 'Bond', 'ETF', 'Currency']:
+                            broker_instruments = broker.get_market_instruments(instrument_type)
+                            for instrument in broker_instruments:
+                                instrument['broker'] = broker_name
+                                instruments.append(instrument)
+                    except Exception as e:
+                        logger.error(f"Error getting instruments from {broker_name}: {e}")
+            
+            return jsonify(instruments)
+            
+        # API endpoint for running backtest
+        @self.app.route('/api/backtest/run', methods=['POST'])
+        def run_backtest():
+            data = request.json
+            
+            # Validate request
+            required_fields = ['strategy_id', 'instrument_id', 'start_date', 'end_date', 'timeframe']
+            for field in required_fields:
+                if field not in data:
+                    return jsonify({"error": f"Missing required field: {field}"}), 400
+            
+            # Parse dates
+            try:
+                start_date = datetime.strptime(data['start_date'], '%Y-%m-%d')
+                end_date = datetime.strptime(data['end_date'], '%Y-%m-%d')
+            except ValueError:
+                return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+            
+            # Create strategy
+            strategy_id = data['strategy_id']
+            strategy_params = data.get('strategy_params', {})
+            risk_params = data.get('risk_params', {})
+            
+            strategy = StrategyFactory.create_strategy(
+                strategy_id=strategy_id,
+                risk_params=risk_params,
+                **strategy_params
+            )
+            
+            if not strategy:
+                return jsonify({"error": f"Failed to create strategy: {strategy_id}"}), 400
+            
+            # Get historical data for the specified instrument
+            instrument_id = data['instrument_id']
+            timeframe = data['timeframe']
+            
+            # Find broker that has this instrument
+            broker = None
+            instrument_data = None
+            
+            for broker_name, broker_instance in self.brokers.items():
+                try:
+                    # Try to get instrument details
+                    instruments = broker_instance.get_market_instruments()
+                    for instr in instruments:
+                        if instr.get('figi') == instrument_id or instr.get('id') == instrument_id:
+                            broker = broker_instance
+                            instrument_data = instr
+                            break
+                except Exception as e:
+                    logger.warning(f"Error checking instrument in {broker_name}: {e}")
+                
+                if broker:
+                    break
+            
+            if not broker or not instrument_data:
+                return jsonify({"error": f"Instrument {instrument_id} not found in any broker"}), 404
+            
+            try:
+                # Get historical candles
+                candles = broker.get_candles(
+                    figi=instrument_id,
+                    from_date=start_date,
+                    to_date=end_date,
+                    interval=timeframe
+                )
+                
+                if not candles or len(candles) < strategy.get_required_candles_count():
+                    return jsonify({
+                        "error": f"Not enough historical data. Need at least {strategy.get_required_candles_count()} candles, got {len(candles) if candles else 0}"
+                    }), 400
+                
+                # Create backtest instance
+                initial_capital = data.get('initial_capital', 10000.0)
+                commission_pct = data.get('commission_pct', 0.001)
+                slippage_pct = data.get('slippage_pct', 0.0005)
+                
+                backtest = Backtest(
+                    strategy=strategy,
+                    initial_capital=initial_capital,
+                    commission_pct=commission_pct,
+                    slippage_pct=slippage_pct
+                )
+                
+                # Run backtest
+                backtest_results = backtest.run(candles)
+                
+                # Check if optimization is requested
+                if data.get('optimize', False):
+                    # Define parameter ranges for optimization
+                    param_ranges = {}
+                    
+                    if 'fast_period' in strategy_params:
+                        param_ranges['fast_period'] = list(range(5, 31, 5))
+                    
+                    if 'slow_period' in strategy_params:
+                        param_ranges['slow_period'] = list(range(20, 101, 10))
+                    
+                    if param_ranges:
+                        # Run optimization
+                        optimization_results = backtest.optimize_strategy(
+                            candles=candles,
+                            param_ranges=param_ranges,
+                            target_metric='sharpe_ratio'
+                        )
+                        
+                        # Add optimization results to backtest results
+                        backtest_results['optimization'] = optimization_results
+                
+                # Calculate performance metrics
+                metrics = backtest.calculate_performance_metrics()
+                backtest_results.update(metrics)
+                
+                return jsonify(backtest_results)
+                
+            except Exception as e:
+                logger.error(f"Error running backtest: {e}")
+                return jsonify({"error": f"Error running backtest: {str(e)}"}), 500
+        
         # API endpoint for starting a trading session
         @self.app.route('/api/trading_session/start', methods=['POST'])
         def start_trading_session():
@@ -200,37 +392,42 @@ class WebServer:
             if strategy_id in self.strategies:
                 strategy = self.strategies[strategy_id]
             else:
-                # Get parameters from request
-                parameters = data.get('parameters', {})
-                strategy = StrategyFactory.create_strategy(strategy_id, **parameters)
+                # Create new strategy instance
+                strategy_params = data.get('strategy_params', {})
+                risk_params = data.get('risk_params', {})
+                
+                strategy = StrategyFactory.create_strategy(
+                    strategy_id=strategy_id,
+                    risk_params=risk_params,
+                    **strategy_params
+                )
                 
                 if not strategy:
-                    return jsonify({"error": f"Failed to create strategy {strategy_id}"}), 500
-                
-                # Register the strategy
-                self.strategies[strategy_id] = strategy
+                    return jsonify({"error": f"Failed to create strategy: {strategy_id}"}), 400
             
-            # Create session
+            # Create new session
             session_id = str(self.next_session_id)
             self.next_session_id += 1
             
-            self.active_sessions[session_id] = {
+            session = {
                 'id': session_id,
                 'broker': data['broker'],
                 'account_id': data['account_id'],
                 'strategy': strategy_id,
                 'instruments': data['instruments'],
-                'parameters': data.get('parameters', {}),
-                'status': 'running',
-                'started_at': datetime.now().isoformat()
+                'status': 'active',
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat()
             }
             
-            logger.info(f"Started trading session {session_id} with strategy {strategy_id}")
+            self.active_sessions[session_id] = session
+            
+            # TODO: Start actual trading thread/process for this session
             
             return jsonify({
-                "status": "success", 
-                "message": "Trading session started",
-                "session_id": session_id
+                'session_id': session_id,
+                'status': 'active',
+                'message': 'Trading session started successfully'
             })
         
         # API endpoint for stopping a trading session
@@ -238,37 +435,34 @@ class WebServer:
         def stop_trading_session():
             data = request.json
             
-            # Validate request
-            required_fields = ['session_id']
-            for field in required_fields:
-                if field not in data:
-                    return jsonify({"error": f"Missing required field: {field}"}), 400
+            if 'session_id' not in data:
+                return jsonify({"error": "Missing session_id parameter"}), 400
             
             session_id = data['session_id']
             
             if session_id not in self.active_sessions:
-                return jsonify({"error": f"Trading session {session_id} not found"}), 404
+                return jsonify({"error": f"Session {session_id} not found"}), 404
             
             # Update session status
             self.active_sessions[session_id]['status'] = 'stopped'
-            self.active_sessions[session_id]['stopped_at'] = datetime.now().isoformat()
+            self.active_sessions[session_id]['updated_at'] = datetime.now().isoformat()
             
-            logger.info(f"Stopped trading session {session_id}")
+            # TODO: Stop actual trading thread/process for this session
             
             return jsonify({
-                "status": "success", 
-                "message": "Trading session stopped"
+                'session_id': session_id,
+                'status': 'stopped',
+                'message': 'Trading session stopped successfully'
             })
         
         # API endpoint for active trading sessions
         @self.app.route('/api/trading_sessions', methods=['GET'])
         def get_trading_sessions():
-            status_filter = request.args.get('status')
-            
+            # Convert sessions dict to list
             sessions = list(self.active_sessions.values())
             
-            if status_filter:
-                sessions = [s for s in sessions if s['status'] == status_filter]
+            # Sort by creation time (newest first)
+            sessions.sort(key=lambda x: x['created_at'], reverse=True)
             
             return jsonify(sessions)
     
@@ -278,7 +472,7 @@ class WebServer:
         
         Args:
             name: Broker name
-            broker_instance: Broker API instance
+            broker_instance: Broker instance
         """
         self.brokers[name] = broker_instance
         logger.info(f"Registered broker: {name}")
@@ -296,30 +490,30 @@ class WebServer:
     
     def register_risk_manager(self, risk_manager: Any):
         """
-        Register the risk manager
+        Register a risk manager instance
         
         Args:
             risk_manager: Risk manager instance
         """
         self.risk_manager = risk_manager
-        logger.info("Registered risk manager")
+        logger.info(f"Registered risk manager")
     
     def register_trade_logger(self, trade_logger: Any):
         """
-        Register the trade logger
+        Register a trade logger instance
         
         Args:
             trade_logger: Trade logger instance
         """
         self.trade_logger = trade_logger
-        logger.info("Registered trade logger")
+        logger.info(f"Registered trade logger")
     
     def run(self, debug: bool = False):
         """
         Run the web server
         
         Args:
-            debug: Enable debug mode (default: False)
+            debug: Enable debug mode
         """
         logger.info(f"Starting web server on {self.host}:{self.port}")
         self.app.run(host=self.host, port=self.port, debug=debug) 
